@@ -8,6 +8,8 @@ Programmed by:
 
 YASON, DIEGO DAVID PEREZ - 12308978
 
+Entry Class File: marquee.cpp
+
 ## Compile/Run Instructions
 
 Compile file `marquee.cpp` and run the resulting .exe file.
