@@ -1,17 +1,27 @@
 {
+  "version": "0.2.0",
   "configurations": [
     {
-      "name": "C/C++: cl.exe build and debug active file",
-      "type": "cppvsdbg",
+      "name": "Debug CMake Target",
+      "type": "cppdbg",
       "request": "launch",
-      "program": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+      // ${command:cmake.launchTargetPath} automatically resolves the built executable
+      "program": "${command:cmake.launchTargetPath}",
       "args": [],
       "stopAtEntry": false,
-      "cwd": "${fileDirname}",
+      "cwd": "${workspaceFolder}/mo4",
       "environment": [],
-      "console": "externalTerminal",
-      "preLaunchTask": "C/C++: cl.exe build active file"
+      "externalConsole": true,
+      "MIMode": "gdb", // Use "lldb" on macOS or "gdb" on Linux/MinGW
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      // Builds the target automatically before running
+      "preLaunchTask": "CMake: build"
     }
-  ],
-  "version": "2.0.0"
+  ]
 }

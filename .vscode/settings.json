@@ -1,0 +1,14 @@
+{
+  "cmake.sourceDirectory": "D:/GitHub/csopesy/mo4",
+  "files.associations": {
+    "*.h": "cpp",
+    "*.hpp": "cpp"
+  },
+  "C_Cpp.default.cppStandard": "c++17",
+  "C_Cpp.default.includePath": [
+    "${workspaceFolder}/mo4/src",
+    "${workspaceFolder}/mo4/external/imgui",
+    "${workspaceFolder}/mo4/external/imgui/backends",
+    "${workspaceFolder}/mo4/external/glfw/include"
+  ]
+}
