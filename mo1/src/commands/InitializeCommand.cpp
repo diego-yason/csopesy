@@ -36,6 +36,11 @@ const char *InitializeCommand::description() const
     return "reads config.txt and prepares the system";
 }
 
+std::vector<std::string> InitializeCommand::usage() const
+{
+    return {"initialize [config path]"};
+}
+
 void InitializeCommand::execute(CommandContext &context, const std::string &arguments)
 {
     if (session_.initialized())

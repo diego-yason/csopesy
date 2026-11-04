@@ -15,6 +15,19 @@ public:
     // Reserves output space for lineCount lines before anything is printed.
     virtual void prepareOutput(int lineCount) = 0;
 
+    // Clears previously printed output. Implementations that own a screen
+    // override this; a plain stream has nothing to clear.
+    virtual void clearScreen()
+    {
+    }
+
+    // How many lines of output the screen can show at once. 0 means unlimited,
+    // which is what contexts without a fixed screen report.
+    virtual int outputCapacity() const
+    {
+        return 0;
+    }
+
     // Asks the command handler to shut down once the current command returns.
     virtual void requestExit() = 0;
 

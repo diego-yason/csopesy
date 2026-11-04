@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "core/CommandContext.h"
 
@@ -22,6 +23,13 @@ public:
     virtual bool requiresInitialization() const
     {
         return false;
+    }
+
+    // Syntax lines shown by "help <command>". Commands without arguments can
+    // leave this empty.
+    virtual std::vector<std::string> usage() const
+    {
+        return {};
     }
 
     // Runs the command. `arguments` is the trimmed text after the command name.

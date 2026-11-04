@@ -44,7 +44,10 @@ namespace
     // Message PRINT shows when the instruction carries no argument.
     std::string defaultPrintMessage(const Process &process)
     {
-        return "Hello world from process_" + std::to_string(process.pid) + "!";
+        // Every scheduled process has a name; fall back to the pid-based form
+        // for hand-built processes that leave it unset.
+        const std::string name = process.name.empty() ? "p-" + std::to_string(process.pid) : process.name;
+        return "Hello world from " + name + "!";
     }
 
     // True for [A-Za-z_][A-Za-z0-9_]*.
@@ -160,6 +163,68 @@ namespace
         }
 
         return operands;
+    }
+
+    // True when `text` is a double-quoted string literal.
+    bool isStringLiteral(const std::string &text)
+    {
+        return text.size() >= 2 && text.front() == '"' && text.back() == '"';
+    }
+
+    // Splits `text` on '+' that is not inside a quoted string.
+    bool splitTerms(const std::string &text, std::vector<std::string> &terms, std::string &errorMessage)
+    {
+        terms.clear();
+
+        std::string current;
+        bool inQuotes = false;
+        for (const char character : text)
+        {
+            if (character == '"')
+            {
+                inQuotes = !inQuotes;
+                current.push_back(character);
+                continue;
+            }
+
+            if (character == '+' && !inQuotes)
+            {
+                terms.push_back(trim(current));
+                current.clear();
+                continue;
+            }
+
+            current.push_back(character);
+        }
+
+        if (inQuotes)
+        {
+            errorMessage = "Unterminated string literal in '" + text + "'.";
+            return false;
+        }
+
+        terms.push_back(trim(current));
+        return true;
+    }
+
+    // Turns one PRINT term into text. Undeclared variables read as 0.
+    std::string resolvePrintTerm(const Process &process, const std::string &term)
+    {
+        if (isStringLiteral(term))
+        {
+            return term.substr(1, term.size() - 2);
+        }
+
+        if (isIdentifier(term))
+        {
+            const auto found = process.data.variables.find(term);
+            return std::to_string(found == process.data.variables.end() ? 0 : found->second);
+        }
+
+        std::uint16_t value = 0;
+        std::string errorMessage;
+        parseUint16(term, value, errorMessage);
+        return std::to_string(value);
     }
 
     // Reads an operand that may be a variable name or a literal. Undeclared
@@ -396,6 +461,50 @@ namespace
 
         return list;
     }
+
+    // Moves the cursor past every instruction list that has run out, closing
+    // finished FOR loops on the way. Returns false when the program as a whole
+    // has completed. Running this straight after an instruction retires reports
+    // the finish in that same cycle, instead of leaving a done process parked on
+    // its final line (Running, cur == total) until it is stepped again.
+    bool normalizeCursor(Process &process, const std::vector<Instruction> &root)
+    {
+        if (process.position.empty())
+        {
+            process.position.push_back(0);
+        }
+
+        while (true)
+        {
+            const std::vector<Instruction> *list = listFor(root, process.position);
+            if (list == nullptr)
+            {
+                return false;
+            }
+
+            if (process.position.back() < list->size())
+            {
+                return true;
+            }
+
+            if (process.position.size() == 1)
+            {
+                return false; // the program finished
+            }
+
+            if (process.remainingIterations.back() > 0)
+            {
+                --process.remainingIterations.back();
+                process.position.back() = 0;
+                continue;
+            }
+
+            // The innermost loop is done; resume after its FOR.
+            process.remainingIterations.pop_back();
+            process.position.pop_back();
+            ++process.position.back();
+        }
+    }
 }
 
 // Parses one instruction line. `depth` is 1 for top-level instructions and
@@ -434,13 +543,40 @@ static bool parseInstruction(const std::string &text,
 
     if (name == "PRINT")
     {
-        // The whole message is one operand, so commas inside it are kept.
+        // No value prints the default message.
         instruction.opcode = OpCode::Print;
         instruction.operands.clear();
-        if (!inner.empty())
+        if (inner.empty())
         {
-            instruction.operands.push_back(inner);
+            return true;
         }
+
+        // Otherwise the value is a quoted string, a variable, or a number;
+        // '+' concatenates them.
+        std::vector<std::string> terms;
+        if (!splitTerms(inner, terms, errorMessage))
+        {
+            return false;
+        }
+
+        for (const std::string &term : terms)
+        {
+            if (term.empty())
+            {
+                errorMessage = "PRINT has an empty value in '" + inner + "'.";
+                return false;
+            }
+
+            if (isStringLiteral(term) || isValueOperand(term))
+            {
+                continue;
+            }
+
+            errorMessage = "PRINT value '" + term + "' is not a quoted string, a variable, or a number.";
+            return false;
+        }
+
+        instruction.operands = terms;
         return true;
     }
 
@@ -519,8 +655,19 @@ void Interpreter::execute(Process &process, const Instruction &instruction, Proc
     {
     case OpCode::Print:
     {
-        const bool hasMessage = !instruction.operands.empty() && !instruction.operands[0].empty();
-        output.writeLine(hasMessage ? instruction.operands[0] : defaultPrintMessage(process));
+        if (instruction.operands.empty())
+        {
+            output.writeLine(defaultPrintMessage(process));
+            return;
+        }
+
+        std::string text;
+        for (const std::string &term : instruction.operands)
+        {
+            text += resolvePrintTerm(process, term);
+        }
+
+        output.writeLine(text);
         return;
     }
 
@@ -609,61 +756,40 @@ bool Interpreter::step(Process &process, ProcessOutput &output)
         return false;
     }
 
-    if (process.position.empty())
+    if (!normalizeCursor(process, root))
     {
-        process.position.push_back(0);
+        return false;
     }
 
-    while (true)
+    const std::vector<Instruction> *list = listFor(root, process.position);
+    const Instruction &instruction = (*list)[process.position.back()];
+
+    if (instruction.opcode == OpCode::For)
     {
-        const std::vector<Instruction> *list = listFor(root, process.position);
-        if (list == nullptr)
+        const std::size_t repeats = repeatCount(instruction);
+        if (repeats == 0)
         {
-            return false;
-        }
-
-        if (process.position.back() >= list->size())
-        {
-            // The current instruction list ran out.
-            if (process.position.size() == 1)
-            {
-                return false; // the program finished
-            }
-
-            if (process.remainingIterations.back() > 0)
-            {
-                --process.remainingIterations.back();
-                process.position.back() = 0;
-                continue;
-            }
-
-            // The innermost loop is done; resume after its FOR.
-            process.remainingIterations.pop_back();
-            process.position.pop_back();
             ++process.position.back();
-            continue;
-        }
-
-        const Instruction &instruction = (*list)[process.position.back()];
-
-        if (instruction.opcode == OpCode::For)
-        {
-            const std::size_t repeats = repeatCount(instruction);
-            if (repeats == 0)
-            {
-                ++process.position.back();
-                return true;
-            }
-
-            // Keep the parent index on the FOR so leaving the loop advances
-            // past it, then descend into the body.
-            process.remainingIterations.push_back(repeats - 1);
-            process.position.push_back(0);
             return true;
         }
 
-        ++process.position.back();
-        execute(process, instruction, output);
+        // Keep the parent index on the FOR so leaving the loop advances
+        // past it, then descend into the body.
+        process.remainingIterations.push_back(repeats - 1);
+        process.position.push_back(0);
         return true;
     }
+
+    ++process.position.back();
+    execute(process, instruction, output);
+
+    // A sleeping process stays parked even when SLEEP is its last line; it
+    // resumes, and then finishes, once it wakes. Anything else that has just
+    // run out of instructions is finished here and now.
+    if (process.state != ProcessState::Waiting && !normalizeCursor(process, root))
+    {
+        return false;
+    }
+
+    return true;
 }

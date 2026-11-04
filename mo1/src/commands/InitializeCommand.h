@@ -11,6 +11,7 @@ public:
 
     const char *name() const override;
     const char *description() const override;
+    std::vector<std::string> usage() const override;
     void execute(CommandContext &context, const std::string &arguments) override;
 
 private:

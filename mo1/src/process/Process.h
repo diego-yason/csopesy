@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -58,6 +59,15 @@ struct StackSegment
     }
 };
 
+// One line a process printed, tagged with when and on which core it happened.
+// Kept so an attached screen can show the output.
+struct ProcessLogEntry
+{
+    std::chrono::system_clock::time_point timestamp;
+    int core = 0;
+    std::string message;
+};
+
 // Where a process is in its lifecycle.
 enum class ProcessState
 {
@@ -87,10 +97,35 @@ struct Process
     // Cycles left before a sleeping process becomes ready again.
     std::uint8_t sleepCycles = 0;
 
+    // When the process was last put on a core, and when it finished.
+    std::chrono::system_clock::time_point attachedAt;
+    std::chrono::system_clock::time_point finishedAt;
+
+    // When the process last left a core without finishing (preempted by the
+    // scheduler, or parked by SLEEP). A default-constructed value means it has
+    // never run, and reports show a null timestamp for it.
+    std::chrono::system_clock::time_point detachedAt;
+
+    // CPU cycles this process still has to busy-wait on its core before the
+    // next instruction runs (config "delay-per-exec").
+    std::uint64_t delayRemaining = 0;
+
     TextSegment text;
     DataSegment data;
     HeapSegment heap;
     StackSegment stack;
+
+    // Everything this process has printed so far. Only the latest
+    // kMaxLogEntries lines are kept.
+    std::vector<ProcessLogEntry> log;
+
+    static constexpr std::size_t kMaxLogEntries = 7;
+
+    // True once the process has left a core at least once.
+    bool hasDetached() const
+    {
+        return detachedAt != std::chrono::system_clock::time_point{};
+    }
 
     // One cycle passes for a sleeping process. Returns true when it wakes up.
     bool tickSleep()
@@ -112,5 +147,59 @@ struct Process
 
         state = ProcessState::Ready;
         return true;
+    }
+
+    // Instruction lines in the text segment, counting FOR bodies.
+    std::size_t totalLines() const
+    {
+        return countLines(text.instructions);
+    }
+
+    // 1-based line of the next instruction, flattening FOR loops in pre-order.
+    std::size_t currentLine() const
+    {
+        const std::size_t total = totalLines();
+
+        std::size_t line = 1;
+        const std::vector<Instruction> *list = &text.instructions;
+
+        for (std::size_t depth = 0; depth < position.size(); ++depth)
+        {
+            const std::size_t index = position[depth];
+            if (index >= list->size())
+            {
+                // The cursor ran past the end: report the final line.
+                return total > 0 ? total : 1;
+            }
+
+            for (std::size_t before = 0; before < index; ++before)
+            {
+                line += 1 + countLines((*list)[before].body);
+            }
+
+            if (depth + 1 < position.size())
+            {
+                line += 1; // the FOR line itself
+                list = &(*list)[index].body;
+            }
+        }
+
+        return total > 0 && line > total ? total : line;
+    }
+
+private:
+    static std::size_t countLines(const std::vector<Instruction> &list)
+    {
+        std::size_t total = 0;
+        for (const Instruction &instruction : list)
+        {
+            total += 1;
+            if (!instruction.body.empty())
+            {
+                total += countLines(instruction.body);
+            }
+        }
+
+        return total;
     }
 };
