@@ -179,6 +179,12 @@ g++ -std=c++17 -Isrc src/main.cpp src/console/InputHandler.cpp src/core/CommandR
 
 or `.\handler.exe` after a direct compile.
 
+The banner at the top of the console (`kReservedLines` in `src/main.cpp`) is
+redrawn by nothing and never scrolls: the command area below it is a 20-line
+scrolling region (`kMaxLines = kReservedLines + kCommandLines`). If you add or
+remove a banner line, adjust `kReservedLines` to match, otherwise the prompt
+overwrites the banner or leaves a gap.
+
 ## Adding a command
 
 1. Add `src/commands/MyCommand.h` / `.cpp` deriving from `Command`

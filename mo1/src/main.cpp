@@ -24,9 +24,11 @@
 namespace
 {
     // Lines 0..kReservedLines-1 hold the static banner. The command area starts
-    // below it and scrolls once it reaches kMaxLines.
-    constexpr int kReservedLines = 4;
-    constexpr int kMaxLines = 24;
+    // below it and scrolls once it reaches kMaxLines, which leaves the same
+    // kCommandLines of scrolling output no matter how tall the banner grows.
+    constexpr int kReservedLines = 8; // title, blank, developers, name, blank, date, hint, blank
+    constexpr int kCommandLines = 20;
+    constexpr int kMaxLines = kReservedLines + kCommandLines;
 
     int g_cursorLine = kReservedLines;
     int g_cursorColumn = 0;
@@ -54,7 +56,12 @@ namespace
 int main()
 {
     std::cout << "\033[H\033[2J" << std::flush;
-    std::cout << "CSOPESY Command Handler" << std::endl;
+    std::cout << "CSOPESY Process Scheduler" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Developers:" << std::endl;
+    std::cout << "Yason, Diego David <12308978>" << std::endl;
+    std::cout << std::endl;
+    std::cout << "Last Updated: 5 NOV 2026" << std::endl;
     std::cout << "Type 'initialize' to load config.txt, or 'exit' to quit." << std::endl;
     std::cout << std::endl;
 
