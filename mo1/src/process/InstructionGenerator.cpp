@@ -5,6 +5,12 @@
 
 namespace
 {
+    // The ADD step is randomized between 1 and 10.
+    constexpr unsigned int kMinAddValue = 1;
+    constexpr unsigned int kMaxAddValue = 10;
+
+    // Previous random generator constants, kept for reference.
+    /*
     constexpr int kPrintPercent = 30;
     constexpr int kDeclarePercent = 20;
     constexpr int kAddPercent = 20;
@@ -17,6 +23,7 @@ namespace
     constexpr unsigned int kMaxRepeat = 5;
     constexpr unsigned int kMaxSleep = 20;
     constexpr unsigned int kMaxValue = 99;
+    */
 }
 
 InstructionGenerator::InstructionGenerator(unsigned int seed)
@@ -41,12 +48,70 @@ std::vector<Instruction> InstructionGenerator::generate(std::size_t minLines, st
         std::swap(minLines, maxLines);
     }
 
+    // The program is always the alternating set
+    //   PRINT("Value from: " + x), ADD(x, x, [1-10]), PRINT, ADD, ...
+    // so the instruction count can be any value in [minLines, maxLines].
+    std::uniform_int_distribution<std::size_t> lineCount(minLines, maxLines);
+    const std::size_t requested = lineCount(rng_);
+
+    std::uniform_int_distribution<unsigned int> addValue(kMinAddValue, kMaxAddValue);
+
+    std::vector<Instruction> program;
+    program.reserve(requested);
+
+    for (std::size_t index = 0; index < requested; ++index)
+    {
+        Instruction instruction;
+        if (index % 2 == 0)
+        {
+            // PRINT("Value from: " + x)
+            instruction.opcode = OpCode::Print;
+            instruction.operands = {"\"Value from: \"", "x"};
+        }
+        else
+        {
+            // ADD(x, x, n) with n randomized between 1 and 10.
+            instruction.opcode = OpCode::Add;
+            instruction.operands = {"x", "x", std::to_string(addValue(rng_))};
+        }
+
+        program.push_back(std::move(instruction));
+    }
+
+    return program;
+}
+
+/*
+// Previous implementation, kept for reference: random programs built from
+// PRINT / DECLARE / ADD / SUBTRACT / SLEEP with nested FOR loops.
+//
+std::vector<Instruction> InstructionGenerator::generate(std::size_t minLines, std::size_t maxLines)
+{
+    if (maxLines == 0)
+    {
+        return {};
+    }
+
+    if (minLines == 0)
+    {
+        minLines = 1;
+    }
+
+    if (minLines > maxLines)
+    {
+        std::swap(minLines, maxLines);
+    }
+
     variables_.clear();
     nextVariableIndex_ = 0;
 
     std::uniform_int_distribution<std::size_t> lineCount(minLines, maxLines);
     return generateBlock(lineCount(rng_), 1);
 }
+*/
+
+/*
+// Previous helpers, kept for reference and no longer called.
 
 std::vector<Instruction> InstructionGenerator::generateBlock(std::size_t lineCount, std::size_t depth)
 {
@@ -197,3 +262,4 @@ bool InstructionGenerator::chance(int percent)
     std::uniform_int_distribution<int> roll(1, 100);
     return roll(rng_) <= percent;
 }
+*/

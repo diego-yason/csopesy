@@ -38,7 +38,7 @@ mo1/
     │   └── CpuClock.h/.cpp          cycle counter thread started by the scheduler
     ├── process/                     process model + interpreter
     │   ├── Instruction.h            parsed instruction (opcode + operand)
-    │   ├── InstructionGenerator.h/.cpp  random program generation
+    │   ├── InstructionGenerator.h/.cpp  builds the fixed PRINT/ADD program
     │   ├── Interpreter.h/.cpp       parses and runs process instructions
     │   ├── Process.h                process state + text/data/heap/stack segments
     │   └── ProcessOutput.h          where a running process writes output
@@ -133,6 +133,25 @@ Opcode names are case-insensitive, and whitespace around operands is trimmed.
 twice overwrites the earlier value. Out-of-range literals are clamped rather
 than rejected (`-5` becomes `0`, `70000` becomes `65535`); only non-numeric text
 is an error.
+
+### What generated processes contain
+
+Every process is created with `x = 0` already in its data segment
+(`Scheduler::createProcessLocked`), and `min-ins`/`max-ins` pick the exact number
+of instruction lines. The program is always the alternating set
+
+```
+PRINT("Value from: " + x)
+ADD(x, x, n)        n randomized in [1, 10] on every ADD
+PRINT("Value from: " + x)
+ADD(x, x, n)
+...
+```
+
+starting with `PRINT`, so a program of `X` instructions ends with `PRINT` when `X`
+is odd and with `ADD` when it is even. The previous random generator (PRINT /
+DECLARE / ADD / SUBTRACT / SLEEP with nested `FOR`) is preserved as comments in
+`InstructionGenerator.cpp`.
 
 To add an instruction:
 

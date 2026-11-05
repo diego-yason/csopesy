@@ -438,6 +438,11 @@ Process *Scheduler::createProcessLocked(const std::string &name)
 
     process->state = ProcessState::Ready;
     process->delayRemaining = delay_per_exec_;
+
+    // Every process starts with x = 0 in its data segment: the generated
+    // PRINT("Value from: " + x) / ADD(x, x, n) program depends on it.
+    process->data.variables["x"] = 0;
+
     process->text.instructions = generator_.generate(static_cast<std::size_t>(config.minIns),
                                                      static_cast<std::size_t>(config.maxIns));
 

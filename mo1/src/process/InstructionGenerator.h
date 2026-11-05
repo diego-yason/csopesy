@@ -7,8 +7,9 @@
 
 #include "process/Instruction.h"
 
-// Builds random but valid instruction programs for auto-generated processes.
-// The total line count, counting FOR bodies, stays inside the requested range.
+// Builds the instruction program for generated processes. Every program is the
+// alternating set PRINT("Value from: " + x), ADD(x, x, [1-10]), PRINT, ... and
+// the requested line count is met exactly.
 class InstructionGenerator
 {
 public:
@@ -20,6 +21,8 @@ public:
     std::vector<Instruction> generate(std::size_t minLines, std::size_t maxLines);
 
 private:
+    // Previous random-program helpers. They are unused now; their bodies are
+    // kept as comments in InstructionGenerator.cpp for reference.
     std::vector<Instruction> generateBlock(std::size_t lineCount, std::size_t depth);
 
     Instruction makeRandomInstruction();
