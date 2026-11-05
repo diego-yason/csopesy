@@ -60,40 +60,43 @@ std::vector<std::string> buildScreenReport(const Scheduler &scheduler, const Rep
     {
         const std::string progress = std::to_string(process.currentLine) + " / " + std::to_string(process.totalLines);
 
-        switch (process.state)
+        if (process.state == ProcessState::Finished)
         {
-        case ProcessState::Finished:
             finished.push_back(process.name + " (" + formatTimestamp(process.finishedAt) + ") Finished " + progress);
-            break;
-
-        case ProcessState::Running:
+        }
+        else if (process.core >= 0)
+        {
+            // On a core, including the cycle a preempted process is swapped out.
             running.push_back(process.name + " (" + formatTimestamp(process.attachedAt) + ") Core: " +
                               std::to_string(process.core) + "  " + progress);
-            break;
-
-        case ProcessState::Ready:
-            // Queued processes show when they last lost their core; one that has
-            // never run has no detach time at all, reported as null.
-            queued.push_back(process.name + " (" +
-                             (process.detached ? formatTimestamp(process.detachedAt) : std::string("null")) +
-                             ") Queued " + progress);
-            break;
-
-        case ProcessState::Waiting:
+        }
+        else if (process.state == ProcessState::Waiting)
+        {
             // Parked by SLEEP: show the wait that is still to go.
             sleeping.push_back(process.name + " (" +
                                (process.detached ? formatTimestamp(process.detachedAt) : std::string("null")) +
                                ") Sleeping " + progress + "  (cycles remaining: " +
                                std::to_string(process.sleepCycles) + ")");
-            break;
+        }
+        else
+        {
+            // Queued processes show when they last lost their core; one that has
+            // never run has no detach time at all, reported as null.
+            queued.push_back(process.name + " (" +
+                             (process.detached ? formatTimestamp(process.detachedAt) : std::string("null")) +
+                             ") Queued " + progress);
         }
     }
 
+    // "Used" is the allocation the cycle started with, recorded before anything
+    // ran. The process list below is a live snapshot, so a process that slept
+    // or finished during that cycle has already left its core while the core
+    // still counts as used for the cycle.
     const std::size_t busy = scheduler.busyCores();
     const std::size_t cores = scheduler.coreCount();
     const std::size_t available = cores > busy ? cores - busy : 0;
 
-    // Utilization is busy cores over total cores, as a whole percentage.
+    // Utilization is the share of cores the cycle ran on, as a whole percentage.
     const std::size_t utilization = cores > 0 ? (busy * 100) / cores : 0;
 
     // Entries get whatever the fixed block leaves of this command's budget.

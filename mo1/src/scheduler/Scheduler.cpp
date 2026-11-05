@@ -44,6 +44,7 @@ void Scheduler::start()
 
     running_ = true;
     elapsedCycles_ = 0;
+    cycle_busy_ = 0;
     clock_.start();
 }
 
@@ -98,16 +99,10 @@ std::size_t Scheduler::busyCores() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    std::size_t count = 0;
-    for (const CpuCore &core : cores_)
-    {
-        if (core.process != nullptr)
-        {
-            ++count;
-        }
-    }
-
-    return count;
+    // The allocation this cycle started with, not the live slots: a process
+    // that slept or finished during the cycle has already given up its core,
+    // but the cycle still ran on it.
+    return cycle_busy_;
 }
 
 std::size_t Scheduler::coreCount() const
@@ -330,11 +325,18 @@ void Scheduler::dispatchCores()
         return;
     }
 
-    // Phase 1: hand queued work to idle cores. Doing this before any core runs
-    // keeps a process preempted this cycle from being picked up again by
-    // another core in the same cycle.
+    // Phase 1: release preempted cores, then hand queued work to idle ones.
+    // Doing this before any core runs keeps a process preempted this cycle from
+    // being picked up again by another core in the same cycle.
+    cycle_busy_ = 0;
     for (CpuCore &core : cores_)
     {
+        if (core.needsSwap)
+        {
+            core.process = nullptr;
+            core.needsSwap = false;
+        }
+
         if (core.process == nullptr)
         {
             core.process = policy_->dequeue(ready_);
@@ -344,6 +346,13 @@ void Scheduler::dispatchCores()
                 core.process->attachedAt = std::chrono::system_clock::now();
                 core.quantumUsed = 0;
             }
+        }
+
+        // Recorded here, before anything runs, so a snapshot taken between
+        // ticks shows the load this cycle started with.
+        if (core.process != nullptr)
+        {
+            ++cycle_busy_;
         }
     }
 
@@ -394,7 +403,11 @@ void Scheduler::dispatchCores()
             process.state = ProcessState::Ready;
             process.detachedAt = std::chrono::system_clock::now();
             policy_->enqueue(ready_, &process);
-            core.process = nullptr;
+
+            // The core keeps pointing at the process for the rest of this
+            // cycle; the next Phase 1 replaces it. That keeps the core counts
+            // truthful between ticks instead of showing an idle machine.
+            core.needsSwap = true;
         }
     }
 }

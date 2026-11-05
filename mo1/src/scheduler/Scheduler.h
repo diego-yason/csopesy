@@ -27,6 +27,10 @@ public:
         int id = 0;
         Process *process = nullptr;
         std::size_t quantumUsed = 0;
+
+        // Set when the running process used up its quantum. The core keeps the
+        // process until the next cycle, when it is swapped for queued work.
+        bool needsSwap = false;
     };
 
     Scheduler(CpuClock &clock, const SessionState &session);
@@ -64,7 +68,9 @@ public:
     // How many processes have finished.
     std::size_t finishedCount() const;
 
-    // How many cores are currently holding a process.
+    // How many cores were holding a process when the last cycle began, right
+    // after dispatch. Sampling between ticks then reports the allocation the
+    // cycle ran with instead of the slots a SLEEP or a finish frees later on.
     std::size_t busyCores() const;
 
     // Number of cores the machine has.
@@ -140,6 +146,10 @@ private:
     std::uint64_t elapsedCycles_ = 0;
     std::uint64_t delay_per_exec_ = 0;
     int nextPid_ = 0;
+
+    // Cores holding a process when the last cycle began.
+    std::size_t cycle_busy_ = 0;
+
     std::vector<std::unique_ptr<Process>> processes_;
     std::deque<Process *> ready_;
     std::vector<CpuCore> cores_;

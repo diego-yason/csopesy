@@ -55,7 +55,7 @@ mo1/
 | `exit`       | always                | exits the program                                      |
 | `scheduler-start` | after initialization | starts the CPU clock and generates a process every `batch-process-freq` cycles |
 | `scheduler-stop`  | after initialization | stops generating processes; the CPU clock keeps ticking |
-| `screen -ls`      | after initialization | CPU utilization percentage and core counts, then the running processes and the finished ones; long sections show the first 2, `...`, then the last 1 |
+| `screen -ls`      | after initialization | CPU utilization as `used cores * 100 / total cores` (whole percent) and core counts, where `Cores used` is the allocation the cycle started with: it is recorded right after dispatch, so a `SLEEP` park or a finish later in the same cycle does not make a core look free; then the running processes and the finished ones; long sections show the first 2, `...`, then the last 1 |
 | `screen -s <name>`| after initialization | creates a process with exactly that name, starts CPU scheduling, and enters its screen |
 | `screen -r <name>`| after initialization | clears the console and switches into that process's screen; unknown or already-finished names report `Process '<name>' not found.` |
 | `process-smi`     | inside a screen       | shows the attached process's name, pid, current instruction line, lines of code, and its latest 7 log lines |
