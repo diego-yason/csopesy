@@ -4,8 +4,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <vector>
 
 #include "config/SessionState.h"
@@ -57,6 +59,12 @@ public:
     void stop();
 
     bool running() const;
+
+    // Receives every line a running process prints, on the clock thread. Used
+    // to mirror a process's output into its attached screen as it happens.
+    using OutputListener = std::function<void(const Process &process, int core, const std::string &line)>;
+
+    void setOutputListener(OutputListener listener);
 
     // Advances the machine by one cycle. CpuClock calls this; tests may call it
     // directly to step time deterministically.
@@ -142,6 +150,7 @@ private:
     std::unique_ptr<SchedulingPolicy> policy_;
 
     mutable std::mutex mutex_;
+    OutputListener output_listener_;
     bool running_ = false;
     std::uint64_t elapsedCycles_ = 0;
     std::uint64_t delay_per_exec_ = 0;

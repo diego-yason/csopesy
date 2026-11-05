@@ -3,6 +3,7 @@
 #include <chrono>
 #include <random>
 #include <string>
+#include <utility>
 
 #include "process/Interpreter.h"
 #include "process/ProcessOutput.h"
@@ -71,6 +72,12 @@ bool Scheduler::running() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
     return running_;
+}
+
+void Scheduler::setOutputListener(OutputListener listener)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    output_listener_ = std::move(listener);
 }
 
 std::size_t Scheduler::processCount() const
@@ -210,9 +217,10 @@ namespace
     class ProcessLogOutput : public ProcessOutput
     {
     public:
-        ProcessLogOutput(Process &process, int coreId)
+        ProcessLogOutput(Process &process, int coreId, const Scheduler::OutputListener *listener)
             : process_(process),
-              core_id_(coreId)
+              core_id_(coreId),
+              listener_(listener)
         {
         }
 
@@ -224,11 +232,19 @@ namespace
             }
 
             process_.log.push_back(ProcessLogEntry{std::chrono::system_clock::now(), core_id_, text});
+
+            // Mirror the line to the screen that is showing this process, after
+            // logging it, so the console and process-smi agree.
+            if (listener_ != nullptr && *listener_)
+            {
+                (*listener_)(process_, core_id_, text);
+            }
         }
 
     private:
         Process &process_;
         int core_id_;
+        const Scheduler::OutputListener *listener_ = nullptr;
     };
 }
 
@@ -374,7 +390,7 @@ void Scheduler::dispatchCores()
         }
         else
         {
-            ProcessLogOutput output(process, core.id);
+            ProcessLogOutput output(process, core.id, &output_listener_);
             const bool advanced = Interpreter::step(process, output);
 
             // The delay applies before the next instruction, so it is armed

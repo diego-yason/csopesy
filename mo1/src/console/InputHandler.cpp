@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <string>
 #include <utility>
 
 InputHandler::InputHandler(int *x, int *y, EnterHandler onEnter, int maxLines, int resetLine)
@@ -126,6 +127,36 @@ void InputHandler::writeCurrentLine(const char *text)
     const int textLength = std::min(static_cast<int>(std::strlen(text)), static_cast<int>(info.dwSize.X));
     DWORD written = 0;
     WriteConsoleA(console_, text, static_cast<DWORD>(textLength), &written, nullptr);
+    *x_ = textLength;
+    SetConsoleCursorPosition(console_, currentPosition());
+}
+
+void InputHandler::redrawPrompt(const char *prompt)
+{
+    if (!hasPosition() || console_ == INVALID_HANDLE_VALUE || console_ == nullptr)
+    {
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(console_mutex_);
+    prepareNextPrompt(1);
+
+    CONSOLE_SCREEN_BUFFER_INFO info{};
+    if (!GetConsoleScreenBufferInfo(console_, &info))
+    {
+        return;
+    }
+
+    clearLines(*y_, 1);
+    SetConsoleCursorPosition(console_, {0, static_cast<SHORT>(*y_)});
+
+    // Prompt plus whatever the user has typed so far; the input buffer is read
+    // under the console lock, so a keystroke cannot land half-way through.
+    const std::string text = std::string(prompt) + input_;
+    const int textLength = std::min(static_cast<int>(text.size()), static_cast<int>(info.dwSize.X));
+    DWORD written = 0;
+    WriteConsoleA(console_, text.c_str(), static_cast<DWORD>(textLength), &written, nullptr);
+
     *x_ = textLength;
     SetConsoleCursorPosition(console_, currentPosition());
 }

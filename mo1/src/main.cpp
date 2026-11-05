@@ -90,6 +90,21 @@ int main()
 
     ScreenCommandContext context(inputHandler);
 
+    // Live process output: a PRINT from the process whose screen is open is
+    // drawn immediately, and the prompt (with any partially typed command) is
+    // redrawn underneath so typing is not lost.
+    scheduler.setOutputListener([&inputHandler, &console](const Process &process, int core, const std::string &line)
+                                {
+        (void)core;
+
+        if (!console.attached() || console.attachedProcess() != process.name)
+        {
+            return;
+        }
+
+        inputHandler.writeLine(line.c_str());
+        inputHandler.redrawPrompt(console.prompt().c_str()); });
+
     inputHandler.setEnterHandler([&processor, &inputHandler, &context]()
                                  {
         processor.process(inputHandler.getInput(), context);

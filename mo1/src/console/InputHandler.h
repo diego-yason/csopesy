@@ -49,6 +49,10 @@ public:
     // Draws at the cursor line without moving past it (used for the prompt).
     void writeCurrentLine(const char *text);
 
+    // Redraws the prompt line as `prompt` followed by whatever has been typed
+    // so far, so live output can be printed without losing partial input.
+    void redrawPrompt(const char *prompt);
+
     // Erases the command area and moves the cursor back to its top.
     void clearScreen();
 
